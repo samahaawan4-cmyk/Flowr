@@ -1,0 +1,12 @@
+const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');const E=vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../www/assets/roto-engine.js'),'utf8')+';RotoEngine');
+const w=144,h=100,rgba=new Uint8ClampedArray(w*h*4),labels=new Uint8Array(w*h),truth=new Uint8Array(w*h);
+for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x,subject=x>=20&&x<70&&y>=15&&y<85,hole=x>=39&&x<49&&y>=25&&y<40,other=x>=100&&x<125&&y>=30&&y<65;truth[i]=subject&&!hole?255:0;rgba.set((subject&&!hole)||other?[190+(x%5),90+(y%5),65,255]:[45+x%4,95+y%4,145,255],i*4)}
+for(let y=50;y<65;y++)labels[y*w+35]=1;
+const result=E.segment({rgba,width:w,height:h,seeds:labels,settings:{smart:true,iterations:2,radius:1,feather:0}});let intersection=0,union=0;for(let i=0;i<truth.length;i++){if(truth[i]&&result.alpha[i]>127)intersection++;if(truth[i]||result.alpha[i]>127)union++}const iou=intersection/union;console.log({iou,other:result.alpha[50*w+110],hole:result.alpha[30*w+44],fg:result.alpha[70*w+55]});assert(iou>.96);assert.equal(result.alpha[50*w+110],0);assert.equal(result.alpha[30*w+44],0);
+// An oversized brush near the edge cannot force the contrasting background into the foreground.
+const stamp=new Uint8Array(w*h);E.brushStamp(rgba,w,h,stamp,22,55,14,1,48);assert.equal(stamp[55*w+25],1);assert.equal(stamp[55*w+15],0);
+// Red corrections are retained even after feathering.
+labels[60*w+45]=2;const corrected=E.segment({rgba,width:w,height:h,seeds:labels,prior:result.alpha,settings:{smart:true,iterations:2,radius:2,feather:1}});assert.equal(corrected.alpha[60*w+45],0);assert.equal(corrected.alpha[55*w+35],255);
+console.log('PASS: single-stroke connected selection without box/background marks, same-color distractor rejection, holes, edge-aware brush footprint and hard correction after feathering');
+
+const W=1024,H=128,hi=new Uint8ClampedArray(W*H*4),marks=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x,a=x===212&&y>=15&&y<113?.5:x>=213&&x<521&&y>=15&&y<113?1:0;hi.set([230*a+20*(1-a),130*a+60*(1-a),50*a+120*(1-a),255],i*4)}marks[60*W+401]=1;const fine=E.segment({rgba:hi,width:W,height:H,seeds:marks,settings:{smart:true,localEdges:true,iterations:2,radius:3,feather:0}});assert.equal(fine.alpha.length,W*H);assert(fine.alpha[60*W+400]>240&&fine.alpha[60*W+900]===0);assert(Math.abs(fine.alpha[60*W+212]-128)<15);console.log('PASS: 1024px multiscale solve, odd-coordinate thin seed preservation and full-resolution fractional edge recovery');

@@ -1,0 +1,2 @@
+let codec;
+self.onmessage=e=>{try{const d=e.data;if(d.init){if(d.format==='mp3')importScripts('../vendor/lame.min.js');importScripts('audio-codec.js');codec=new FlowrAudioEncoder(d);self.postMessage({ready:true});return}if(!codec)throw Error('Audio encoder was not initialized');if(d.left)codec.feed(d.left,d.right);if(d.done)self.postMessage({blob:codec.finish(),frames:codec.frames})}catch(err){self.postMessage({error:err.message})}};
